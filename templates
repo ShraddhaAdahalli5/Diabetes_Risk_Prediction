@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diabetes Disease Progression Prediction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Diabetes Disease Progression Prediction</h1>
+            <p class="subtitle">Enter patient data to predict disease progression score</p>
+        </header>
+
+        {% if not model_loaded %}
+        <div class="alert alert-error">
+            <strong>Warning:</strong> Model not loaded. Please run train_model.py first.
+        </div>
+        {% endif %}
+
+        <div class="form-container">
+            <form id="predictionForm" method="POST" action="/predict">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="age">Age</label>
+                        <input type="number" id="age" name="age" step="0.1" min="19" max="79" required 
+                               placeholder="e.g., 50">
+                        <small>Age of the patient (19-79 years)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sex">Sex</label>
+                        <select id="sex" name="sex" required>
+                            <option value="">Select sex</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                        <small>Select the patient's sex</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bmi">BMI</label>
+                        <input type="number" id="bmi" name="bmi" step="0.1" min="18" max="42" required 
+                               placeholder="e.g., 25.5">
+                        <small>Body Mass Index (18-42)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="bp">Blood Pressure (BP)</label>
+                        <input type="number" id="bp" name="bp" step="0.1" min="62" max="133" required 
+                               placeholder="e.g., 120">
+                        <small>Average blood pressure (62-133 mmHg)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s1">S1 (TC)</label>
+                        <input type="number" id="s1" name="s1" step="0.1" min="97" max="301" required 
+                               placeholder="e.g., 200">
+                        <small>Total cholesterol (97-301 mg/dL)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s2">S2 (LDL)</label>
+                        <input type="number" id="s2" name="s2" step="0.1" min="41.6" max="242.4" required 
+                               placeholder="e.g., 120">
+                        <small>Low-density lipoproteins (41.6-242.4 mg/dL)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s3">S3 (HDL)</label>
+                        <input type="number" id="s3" name="s3" step="0.1" min="22" max="99" required 
+                               placeholder="e.g., 50">
+                        <small>High-density lipoproteins (22-99 mg/dL)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s4">S4 (TCH)</label>
+                        <input type="number" id="s4" name="s4" step="0.01" min="2" max="9.09" required 
+                               placeholder="e.g., 4.5">
+                        <small>Total cholesterol / HDL (2-9.09)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s5">S5 (LTG)</label>
+                        <input type="number" id="s5" name="s5" step="0.0001" min="3.2581" max="6.107" required 
+                               placeholder="e.g., 4.5">
+                        <small>Log of serum triglycerides level (3.26-6.11)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="s6">S6 (GLU)</label>
+                        <input type="number" id="s6" name="s6" step="0.1" min="58" max="124" required 
+                               placeholder="e.g., 90">
+                        <small>Blood sugar level (58-124 mg/dL)</small>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        Predict Disease Progression
+                    </button>
+                    <button type="reset" class="btn btn-secondary">Clear Form</button>
+                </div>
+            </form>
+
+            <div id="result" class="result-container" style="display: none;">
+                <div class="result-box">
+                    <h2>Prediction Result</h2>
+                    <div class="prediction-value">
+                        <span class="label">Predicted Diabetes Progression Score:</span>
+                        <span class="value" id="predictionValue">-</span>
+                    </div>
+                    <div class="interpretation" id="interpretation" style="display: none;">
+                        <span class="interpretation-label">Risk Level:</span>
+                        <span class="interpretation-badge" id="interpretationBadge"></span>
+                    </div>
+                    <div class="interpretation-note">
+                        <small>Note: This score indicates disease progression. Lower scores suggest better outcomes.</small>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error" class="alert alert-error" style="display: none;">
+                <strong>Error:</strong> <span id="errorMessage"></span>
+            </div>
+        </div>
+
+        <footer>
+            <p>Built with Flask and scikit-learn | Diabetes Dataset</p>
+            <a href="/metrics" class="link">View Model Metrics</a>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Hide previous results/errors
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            
+            // Show loading state
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Predicting...';
+            submitBtn.disabled = true;
+            
+            try {
+                const formData = new FormData(this);
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                // Check if response is ok
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show prediction result
+                    document.getElementById('predictionValue').textContent = data.prediction;
+                    
+                    // Show interpretation if available
+                    if (data.interpretation) {
+                        const interpretationEl = document.getElementById('interpretation');
+                        const badgeEl = document.getElementById('interpretationBadge');
+                        badgeEl.textContent = data.interpretation;
+                        badgeEl.style.backgroundColor = data.interpretation_color || '#667eea';
+                        interpretationEl.style.display = 'flex';
+                    }
+                    
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    // Show error
+                    document.getElementById('errorMessage').textContent = data.error || 'An error occurred';
+                    document.getElementById('error').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Prediction error:', error);
+                document.getElementById('errorMessage').textContent = 'Network error: ' + error.message + '. Make sure the Flask server is running.';
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
